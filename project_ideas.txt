@@ -1,0 +1,59 @@
+petits poèmes : on oublie le in context learning ? les induction heads ?
+	hypothèses : non, ces capacités restent utiles même sur des petits textes car elles ne s'appliques pas qu'aux tokens d'entrée, mais aux tokens "raffinés", intermédiaires, qui eux peuvent proter un sens sémantique
+
+longs articles : les induction heads sont méga renforcées :
+	hypothèses : oui, les articles parlent souvent de trucs spécifiques et donc le contexte est beaucoup plus important que pour le reste
+
+fine tuner des tl dr
+fine tuner je sais pas quoi avec les poèmes
+
+
+petits poèmes vs longs articles,
+deux "espèces" qui vont potentiellement trouver deux utilisations aux "plumes"
+
+expérience avec les textes aléatoires qui se répètent à une certaine fréquence :
+	construire un transformer à deux couches,
+	l'entrainer sur le problème,
+	essayer d'identifier les induction head et leur prédecesseurs, comme dans l'article,
+	sans dropout, on n'en voit qu'une seule ?
+	avec dropout, pourquoi il n'y a qu'une rouge ?
+	(rouge : oublie le mot actuel et lui donne le mot précédent
+	 bleu  : fait la recherche avec la query le mot actuel mais trouve le mot suivant)
+	(je crois que j'ai compris comment ça marche : les têtes rouges et bleues projettent les token sur un espace commun ce qui leur permet de travailler en duo et sans gêner les autres têtes -> à vérifier)
+
+	regarder si les matrices de projection K, Q, V sont similaires -> si c'est vrai, on a une méthode facile pour repérer les circuits ! il suffit de regarder quelles têtes ont les mêmes projections, car alors, elles travaillent de concert !
+	problème :  -le feed forward rique de foutre le zbeul comme pas possible ...
+				-la grande W aussi
+
+				il faut trouver comment voir si elles travaillent sur le "même espace"
+
+	fine tuner le modèle sur le même problème mais avec un fréquence différente
+		peut-on vraiment parler d'exaptation ? les plumes ont toujours exactement la même fonction, et dans un environnement très similaire mais un peu différent...
+
+
+pb : trouver un pb qui marche et pour lequel la seule solution simple est l'induction.
+	-3* répété, puis prédire la même chose. Pb : attention ne fait rien, décodeur attention fait juste une bête identité
+	-2*			puis prédire 3*				Pb : il apprend juste la position comme dans le cas suivant
+	-3*			puis prédire juste le 1* répété. Pb : c'est plus une identité, mais il overfit quand même les positions où piocher
+
+problème des séquences de fréquence f1 puis fine tune sur f2 : si jamais le fine tuning change quoi que ce soit, on aura juste prouvé que c'était pas de l'induction. Si jamais le fine tuning ne change rien, alors la robustesse argumente en faveur de l'induction.
+
+Si jamais ça marche : pour prouver que en fait ça marche pas, essayer avec phrases totalement aléatoires, et essayer de retrouver leur début
+
+c'est pas du tout de l'induction
+dans l'article il a des belles matrices triangulaires, comment ça se fait ?
+comment marche la pré induction ?! elle sert à apporter l'information spatiale à l'induction, mais elle non plus, elle a pas d'information spatiale !
+	positional embedding
+
+bon, ça marche pas avec des séquences de fréquence fixe, il apprend juste à quel position il doit regarder. On va passer à des séquences de fréquence variable avec padding
+voir même totalement aléatoire, avec juste un motif qui se répète, perdu au milieu
+dans la description du projet : c'est claqué au sol de vouloir fixer une fréquence, puis de vouloir voir ce que ça fait de la changer ... il va juste overfit brutalement les positions auxquelles il doit regarder... alors que si on a de la vrai induction, là, c'est pratique.
+
+essayer d'avoir de la vrai induction puis fine tune sur les problèmes à fréquences (c'est un peu con, on restreint juste le problème ... mais on va dire que c'est l'environnement qui de vient plus contraint, et ça fait de l'exaptation, tmtc)
+
+peut être phrase aléatoire -> la même mais répétée : le début du diagrame va copier la vrai phrase donc ignore son propre travail, puis la fin du diagramme a épuisé la phrase donc utilise son travail. Pb : il va encore une fois juste overfit les positions.
+
+autre pb/observation : il utilise qu'une seule diagonale (d'où les trous) donc il utilise pas du tout la répétition
+
+réessayer encoder decoder
+lui donner le vrai test pour voir ce qu'il fait
