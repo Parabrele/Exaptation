@@ -57,3 +57,15 @@ autre pb/observation : il utilise qu'une seule diagonale (d'où les trous) donc 
 
 réessayer encoder decoder
 lui donner le vrai test pour voir ce qu'il fait
+
+COI : Algo de COI bizarre : enlever les duplications et regarder quel nom propre reste. Exaptation : suite de tokens random, et extraire le set. 
+Virer la partie à partir d'hinibition ?
+https://openreview.net/pdf?id=NpsVSN6o4ul
+https://openreview.net/forum?id=NpsVSN6o4ul
+
+https://www.aligned-ai.com/
+eleuther ai
+openai anthropic deepmind conjecture ought
+https://jsteinhardt.stat.berkeley.edu/
+stuart russell page
+https://cims.nyu.edu/~sbowman/

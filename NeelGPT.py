@@ -324,7 +324,7 @@ load_gpt2_test(MLP, reference_gpt2.blocks[0].mlp, cache["blocks.0.ln2.hook_norma
 
 
 
-class TransformerBlock(nn.Module):
+class TransformerBlock_with_mlp(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
@@ -344,10 +344,25 @@ class TransformerBlock(nn.Module):
         mlp_out = self.mlp(normalized_resid_mid)
         resid_post = resid_mid + mlp_out
         return resid_post
+
+class TransformerBlock(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+
+        self.ln1 = LayerNorm(cfg)
+        self.attn = Attention(cfg)
+    
+    def forward(self, resid_pre):
+        # resid_pre [batch, position, d_model]
+        normalized_resid_pre = self.ln1(resid_pre)
+        attn_out = self.attn(normalized_resid_pre)
+        resid_post = resid_pre + attn_out
+        
+        return resid_post
+
 rand_float_test(TransformerBlock, [2, 4, 768])
 load_gpt2_test(TransformerBlock, reference_gpt2.blocks[0], cache["resid_pre", 0])
-
-
 
 class Unembed(nn.Module):
     def __init__(self, cfg):
