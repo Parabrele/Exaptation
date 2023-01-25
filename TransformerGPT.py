@@ -8,31 +8,30 @@ import math
 
 @dataclass
 class Config:
-    d_model: int = 768
+    d_residual: int = 64
     debug: bool = True
     layer_norm_eps: float = 1e-5
-    d_vocab: int = 50257
+    d_vocab: int = 100
     init_range: float = 0.02
-    n_ctx: int = 1024
-    d_head: int = 64
-    d_mlp: int = 3072
-    n_heads: int = 12
-    n_layers: int = 12
+    max_length: int = 256
+    d_head: int = 32
+    n_heads: int = 2
+    n_layers: int = 2
 
 
 class LayerNorm(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.w = nn.Parameter(torch.ones(cfg.d_model))
-        self.b = nn.Parameter(torch.zeros(cfg.d_model))
+        self.w = nn.Parameter(torch.ones(cfg.d_residual))
+        self.b = nn.Parameter(torch.zeros(cfg.d_residual))
     
     def forward(self, residual):
-        # residual: [batch, position, d_model]
+        # residual: [batch, position, d_residual]
         if self.cfg.debug: print("Residual:", residual.shape)
-        residual = residual - einops.reduce(residual, "batch position d_model -> batch position 1", "mean")
+        residual = residual - einops.reduce(residual, "batch position d_residual -> batch position 1", "mean")
         # Calculate the variance, square root it. Add in an epsilon to prevent divide by zero.
-        scale = (einops.reduce(residual.pow(2), "batch position d_model -> batch position 1", "mean") + cfg.layer_norm_eps).sqrt()
+        scale = (einops.reduce(residual.pow(2), "batch position d_residual -> batch position 1", "mean") + self.cfg.layer_norm_eps).sqrt()
         normalized = residual / scale
         normalized = normalized * self.w + self.b
         if self.cfg.debug: print("Normalized:", residual.shape)
@@ -43,13 +42,13 @@ class Embed(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.W_E = nn.Parameter(torch.empty((cfg.d_vocab, cfg.d_model)))
+        self.W_E = nn.Parameter(torch.empty((cfg.d_vocab, cfg.d_residual)))
         nn.init.normal_(self.W_E, std=self.cfg.init_range)
     
     def forward(self, tokens):
         # tokens: [batch, position]
         if self.cfg.debug: print("Tokens:", tokens.shape)
-        embed = self.W_E[tokens, :] # [batch, position, d_model]
+        embed = self.W_E[tokens, :] # [batch, position, d_residual]
         if self.cfg.debug: print("Embeddings:", embed.shape)
         return embed
 
@@ -58,14 +57,14 @@ class PosEmbed(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.W_pos = nn.Parameter(torch.empty((cfg.n_ctx, cfg.d_model)))
+        self.W_pos = nn.Parameter(torch.empty((cfg.max_length, cfg.d_residual)))
         nn.init.normal_(self.W_pos, std=self.cfg.init_range)
     
     def forward(self, tokens):
         # tokens: [batch, position]
         if self.cfg.debug: print("Tokens:", tokens.shape)
-        pos_embed = self.W_pos[:tokens.size(1), :] # [position, d_model]
-        pos_embed = einops.repeat(pos_embed, "position d_model -> batch position d_model", batch=tokens.size(0))
+        pos_embed = self.W_pos[:tokens.size(1), :] # [position, d_residual]
+        pos_embed = einops.repeat(pos_embed, "position d_residual -> batch position d_residual", batch=tokens.size(0))
         if self.cfg.debug: print("pos_embed:", pos_embed.shape)
         return pos_embed
 
@@ -74,28 +73,28 @@ class Attention(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.W_Q = nn.Parameter(torch.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.W_Q = nn.Parameter(torch.empty((cfg.n_heads, cfg.d_residual, cfg.d_head)))
         nn.init.normal_(self.W_Q, std=self.cfg.init_range)
         self.b_Q = nn.Parameter(torch.zeros((cfg.n_heads, cfg.d_head)))
-        self.W_K = nn.Parameter(torch.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.W_K = nn.Parameter(torch.empty((cfg.n_heads, cfg.d_residual, cfg.d_head)))
         nn.init.normal_(self.W_K, std=self.cfg.init_range)
         self.b_K = nn.Parameter(torch.zeros((cfg.n_heads, cfg.d_head)))
-        self.W_V = nn.Parameter(torch.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.W_V = nn.Parameter(torch.empty((cfg.n_heads, cfg.d_residual, cfg.d_head)))
         nn.init.normal_(self.W_V, std=self.cfg.init_range)
         self.b_V = nn.Parameter(torch.zeros((cfg.n_heads, cfg.d_head)))
         
-        self.W_O = nn.Parameter(torch.empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
+        self.W_O = nn.Parameter(torch.empty((cfg.n_heads, cfg.d_head, cfg.d_residual)))
         nn.init.normal_(self.W_O, std=self.cfg.init_range)
-        self.b_O = nn.Parameter(torch.zeros((cfg.d_model)))
+        self.b_O = nn.Parameter(torch.zeros((cfg.d_residual)))
         
-        self.register_buffer("IGNORE", torch.tensor(-1e5, dtype=torch.float32, device="cuda"))
+        self.register_buffer("IGNORE", torch.tensor(-1e5, dtype=torch.float32))
     
     def forward(self, normalized_resid_pre):
-        # normalized_resid_pre: [batch, position, d_model]
+        # normalized_resid_pre: [batch, position, d_residual]
         if self.cfg.debug: print("Normalized_resid_pre:", normalized_resid_pre.shape)
         
-        q = einsum("batch query_pos d_model, n_heads d_model d_head -> batch query_pos n_heads d_head", normalized_resid_pre, self.W_Q) + self.b_Q
-        k = einsum("batch key_pos d_model, n_heads d_model d_head -> batch key_pos n_heads d_head", normalized_resid_pre, self.W_K) + self.b_K
+        q = einsum("batch query_pos d_residual, n_heads d_residual d_head -> batch query_pos n_heads d_head", normalized_resid_pre, self.W_Q) + self.b_Q
+        k = einsum("batch key_pos d_residual, n_heads d_residual d_head -> batch key_pos n_heads d_head", normalized_resid_pre, self.W_K) + self.b_K
         
         attn_scores = einsum("batch query_pos n_heads d_head, batch key_pos n_heads d_head -> batch n_heads query_pos key_pos", q, k)
         attn_scores = attn_scores / math.sqrt(self.cfg.d_head)
@@ -103,11 +102,11 @@ class Attention(nn.Module):
 
         pattern = attn_scores.softmax(dim=-1) # [batch, n_head, query_pos, key_pos]
 
-        v = einsum("batch key_pos d_model, n_heads d_model d_head -> batch key_pos n_heads d_head", normalized_resid_pre, self.W_V) + self.b_V
+        v = einsum("batch key_pos d_residual, n_heads d_residual d_head -> batch key_pos n_heads d_head", normalized_resid_pre, self.W_V) + self.b_V
 
         z = einsum("batch n_heads query_pos key_pos, batch key_pos n_heads d_head -> batch query_pos n_heads d_head", pattern, v)
 
-        attn_out = einsum("batch query_pos n_heads d_head, n_heads d_head d_model -> batch query_pos d_model", z, self.W_O) + self.b_O
+        attn_out = einsum("batch query_pos n_heads d_head, n_heads d_head d_residual -> batch query_pos d_residual", z, self.W_O) + self.b_O
         return attn_out
 
     def apply_causal_mask(self, attn_scores):
@@ -126,7 +125,7 @@ class TransformerBlock(nn.Module):
         self.attn = Attention(cfg)
     
     def forward(self, resid_pre):
-        # resid_pre [batch, position, d_model]
+        # resid_pre [batch, position, d_residual]
         normalized_resid_pre = self.ln1(resid_pre)
         attn_out = self.attn(normalized_resid_pre)
         resid_post = resid_pre + attn_out
@@ -138,14 +137,14 @@ class Unembed(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.W_U = nn.Parameter(torch.empty((cfg.d_model, cfg.d_vocab)))
+        self.W_U = nn.Parameter(torch.empty((cfg.d_residual, cfg.d_vocab)))
         nn.init.normal_(self.W_U, std=self.cfg.init_range)
         self.b_U = nn.Parameter(torch.zeros((cfg.d_vocab), requires_grad=False))
     
     def forward(self, normalized_resid_final):
-        # normalized_resid_final [batch, position, d_model]
+        # normalized_resid_final [batch, position, d_residual]
         if self.cfg.debug: print("Normalized_resid_final:", normalized_resid_final.shape)
-        logits = einsum("batch position d_model, d_model d_vocab -> batch position d_vocab", normalized_resid_final, self.W_U) + self.b_U
+        logits = einsum("batch position d_residual, d_residual d_vocab -> batch position d_vocab", normalized_resid_final, self.W_U) + self.b_U
         return logits
 
 

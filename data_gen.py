@@ -147,3 +147,14 @@ def train_radom_pattern(N, N_Val, size = 15, nb_concat = 1):
 
 def train_random_flip(N, N_Val):
     pass
+
+def train_GPT_induction(N, N_Val, f):
+    sentences = torch.randint(3, 100, (N + N_Val, f)).to(device)
+    x = torch.zeros((N + N_Val, 3 * f + 2)).to(device).int() + pad
+    x[:, 0] = sos
+    x[:, 1:f + 1] = sentences
+    x[:, f + 1:2 * f + 1] = sentences
+    x[:, 2 * f + 1:3 * f + 1] = sentences
+    x[:, -1] = eos
+
+    return x.long()

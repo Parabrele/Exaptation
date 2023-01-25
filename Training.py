@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import transformer as tr
+import TransformerGPT as tr
 import data_gen
 import numpy as np
 
@@ -9,63 +9,33 @@ from PIL import Image
 import pickle
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+def lm_cross_entropy_loss(logits, tokens):
+    log_probs = logits.log_softmax(dim=-1)
+    pred_log_probs = log_probs[:, :-1].gather(dim=-1, index=tokens[:, 1:].unsqueeze(-1)).squeeze(-1)
+    return -pred_log_probs.mean()
+
 
 
 # 0 : pad, 1: Start of Sentence, 2: End of sentence
-# Those lists of token_ids are created by the tokenizer
-N = 8192 * 2
-N_Val = 128
-batch_size = 64 #essayer 1024, 512, 256, 128 dans cet ordre -> ça ralentit l'entrainement sans l'améliorer
+epochs = 10
+N = 8192
+N_Val = 64
+f = 10
+batch_size = 64
+lr = 1e-3
+weight_decay = 1e-2
 
-generating = False
-
-if generating :
-    x, trg, cat_trg = data_gen.train_radom_pattern(N, N_Val, size = 10, nb_concat = 8)
-    with open('data_8192_16_x', 'wb') as fichier:
-        pickler = pickle.Pickler(fichier)
-        pickler.dump(x)
-    with open('data_8192_16_trg', 'wb') as fichier:
-        pickler = pickle.Pickler(fichier)
-        pickler.dump(trg)
-    with open('data_8192_16_cat_trg', 'wb') as fichier:
-        pickler = pickle.Pickler(fichier)
-        pickler.dump(cat_trg)
-else :
-    print("loading x...")
-    with open('data_16384_8_x', 'rb') as fichier:
-        unpickler = pickle.Unpickler(fichier)
-        x = unpickler.load()
-    print("loading trg...")
-    with open('data_16384_8_trg', 'rb') as fichier:
-        unpickler = pickle.Unpickler(fichier)
-        trg = unpickler.load()
-    print("loading categorical...")
-    with open('data_16384_8_cat_trg', 'rb') as fichier:
-        unpickler = pickle.Unpickler(fichier)
-        cat_trg = unpickler.load()
-
+x = data_gen.train_GPT_induction(N, N_Val, f)
 x_loader = torch.utils.data.DataLoader(x[:N], batch_size=batch_size, shuffle = False, drop_last=True)
-trg_loader = torch.utils.data.DataLoader(trg[:N], batch_size=batch_size, shuffle = False, drop_last=True)
-cat_loader = torch.utils.data.DataLoader(cat_trg[:N], batch_size=batch_size, shuffle = False, drop_last=True)
-
 val_x_loader = torch.utils.data.DataLoader(x[N:], batch_size=N_Val, shuffle = False, drop_last=True)
-val_trg_loader = torch.utils.data.DataLoader(trg[N:], batch_size=N_Val, shuffle = False, drop_last=True)
-val_cat_loader = torch.utils.data.DataLoader(cat_trg[N:], batch_size=N_Val, shuffle = False, drop_last=True)
 
-src_pad_idx = 0
-trg_pad_idx = 0
-src_vocab_size = 100
-trg_vocab_size = 100
+model_cfg = tr.Config(debug=False, d_residual=256, n_heads=2, d_head=32, n_layers=2, max_length=len(x[0]), d_vocab=100)
 
-model = tr.Transformer(src_vocab_size, trg_vocab_size, src_pad_idx, trg_pad_idx, device=device, embed_size = 64, num_encoder = 0, num_decoder = 2, heads = 2, max_length = len(x[0])).to(
-    device
-)
-opt = torch.optim.Adam(model.parameters(), lr = 0.001)
-loss_fct = torch.nn.CrossEntropyLoss()
+model = tr.Transformer(model_cfg)
 
-# Why do we need :-1 here?
-epochs = 50
+opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+
 x_plot = []
 y_tra_plot = []
 y_val_plot = []
@@ -74,17 +44,17 @@ y_val_acc  = []
 for epoch in range(1, epochs + 1):
     print("epoch : ", epoch)
     print("\ttraining :")
-    for batch, batch_cat, batch_trg in zip(x_loader, cat_loader, trg_loader):
+    for batch in x_loader:
+      pred = model(batch)
+      loss = lm_cross_entropy_loss(pred, batch)
+      loss.backward()
+      opt.step()
       opt.zero_grad()
-      pred = model(batch, batch_trg[:, :-1])
-      loss = loss_fct(pred, batch_cat[:, 1:])
 
       if len(x_plot) == 0 :
         x_plot.append(0)
         y_tra_plot.append(loss.item())
 
-      loss.backward()
-      opt.step()
 
       print("#", end = "")
 
@@ -93,23 +63,21 @@ for epoch in range(1, epochs + 1):
     y_tra_plot.append(loss.item())
 
     print("\n\tvalidating :")
-    for batch, batch_cat, batch_trg in zip(val_x_loader, val_cat_loader, val_trg_loader):
-      pred = model(batch, batch_trg[:, :-1])
-      loss = loss_fct(pred, batch_cat[:, 1:])
+    for batch in val_x_loader:
+      pred = model(batch)
+      loss = lm_cross_entropy_loss(pred, batch)
 
       y_val_plot.append(loss.item())
       print("loss :", loss.item())
 
       accuracy = 0
-      ones = torch.zeros((pred.shape[0], pred.shape[1]))
+      ones = torch.zeros((pred.shape[0], pred.shape[1]-1))
 
-      ones[torch.argmax(pred, dim = 2) == batch_trg[:, 1:]] = 1
+      ones[torch.argmax(pred[:, :-1], dim = 2) == batch[:, 1:]] = 1
       accuracy = torch.sum(ones).item() / (pred.shape[0] * pred.shape[1])
       print("accuracy :", accuracy)
       y_val_acc.append(accuracy * y_tra_plot[0])
 
-    if accuracy > 0.46 :
-        break
     print("\n\n")
 
 plt.xlim(0, epochs)
@@ -118,9 +86,12 @@ plt.plot(x_plot, y_tra_plot)
 plt.plot(x_plot[1:], y_val_plot)
 plt.plot(x_plot[1:], y_val_acc)
 
-x, trg, cat_trg = data_gen.train_fixed_freq_v1(1, 0)
+plt.show()
 
-pred = model(x, trg[:, :-1])
+"""
+x = data_gen.train_GPT_induction()
+
+pred = model(x)[:, :-1]
 
 accuracy = 0
 ones = torch.zeros((pred.shape[0], pred.shape[1]))
@@ -171,4 +142,4 @@ for layer in model.decoder.layers:
   i += 1
 
 
-plt.show()
+plt.show()"""
