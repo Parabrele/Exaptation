@@ -87,7 +87,7 @@ class Attention(nn.Module):
         nn.init.normal_(self.W_O, std=self.cfg.init_range)
         self.b_O = nn.Parameter(torch.zeros((cfg.d_residual)))
         
-        self.register_buffer("IGNORE", torch.tensor(-1e5, dtype=torch.float32))
+        self.register_buffer("IGNORE", torch.tensor(-1e5, dtype=torch.float32, device="cuda"))
     
     def forward(self, normalized_resid_pre):
         # normalized_resid_pre: [batch, position, d_residual]
@@ -101,6 +101,8 @@ class Attention(nn.Module):
         attn_scores = self.apply_causal_mask(attn_scores)
 
         pattern = attn_scores.softmax(dim=-1) # [batch, n_head, query_pos, key_pos]
+
+        self.attention = pattern
 
         v = einsum("batch key_pos d_residual, n_heads d_residual d_head -> batch key_pos n_heads d_head", normalized_resid_pre, self.W_V) + self.b_V
 

@@ -148,13 +148,23 @@ def train_radom_pattern(N, N_Val, size = 15, nb_concat = 1):
 def train_random_flip(N, N_Val):
     pass
 
-def train_GPT_induction(N, N_Val, f):
-    sentences = torch.randint(3, 100, (N + N_Val, f)).to(device)
-    x = torch.zeros((N + N_Val, 3 * f + 2)).to(device).int() + pad
+def train_GPT_induction(N, N_Val, f_max, only_max = False):
+    sentences = torch.randint(3, 100, (N + N_Val, f_max)).to(device)
+    if only_max :
+        f = torch.zeros((N + N_Val,)) + f_max
+        f = f.int()
+    else :
+        f = torch.randint(f_max // 2, f_max, (N + N_Val,))
+
+    x = torch.zeros((N + N_Val, 3 * f_max + 2)).to(device).int() + pad
+
     x[:, 0] = sos
-    x[:, 1:f + 1] = sentences
-    x[:, f + 1:2 * f + 1] = sentences
-    x[:, 2 * f + 1:3 * f + 1] = sentences
-    x[:, -1] = eos
+
+    for i in range(N + N_Val):
+        x[i, 1:f[i] + 1] = sentences[i, :f[i]]
+        x[i, f[i] + 1:2 * f[i] + 1] = sentences[i, :f[i]]
+        x[i, 2 * f[i] + 1:3 * f[i] + 1] = sentences[i, :f[i]]
+
+        x[i, 3 * f[i] + 1] = eos
 
     return x.long()
