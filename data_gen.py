@@ -168,3 +168,62 @@ def train_GPT_induction(N, N_Val, f_max, only_max = False):
         x[i, 3 * f[i] + 1] = eos
 
     return x.long()
+
+def train_GPT_induction_2(N, N_Val, f_max):
+    #x est un mix entre train_gp_induction et train_random_pattern
+
+    sentences = torch.randint(3, 100, (N + N_Val, f_max)).to(device)
+    f = torch.randint(f_max // 2, f_max, (N + N_Val,))
+
+    select = torch.randint(0, 2, (N + N_Val,)).to(device)
+
+    x = torch.randint(3, 100, (N + N_Val, 3 * f_max + 2)).to(device).int() + pad
+
+    x[:, 0] = sos
+
+    for i in range(N + N_Val):
+        if select[i] == 0 :
+            #on fait les fréquences
+            x[i, 1:f[i] + 1] = sentences[i, :f[i]]
+            x[i, f[i] + 1:2 * f[i] + 1] = sentences[i, :f[i]]
+            x[i, 2 * f[i] + 1:3 * f[i] + 1] = sentences[i, :f[i]]
+
+            x[i, 3 * f[i] + 1:] = pad
+            x[i, 3 * f[i] + 1] = eos
+
+        else :
+            #on fait les patterns
+            #on prend un bout de taille f[i] du début de la phrase qu'on répète
+            pos_1 = torch.randint(0, f_max - f[i], (1,)).item()
+            pos_2 = torch.randint(pos_1, 2 * f_max - f[i], (1,)).item()
+            pos_3 = torch.randint(pos_2, 3 * f_max - f[i], (1,)).item()
+
+            x[i, 1:f_max + 1] = sentences[i]
+            x[i, pos_2:pos_2 + f[i]] = sentences[i, pos_1:pos_1 + f[i]]
+            x[i, pos_3:pos_3 + f[i]] = sentences[i, pos_1:pos_1 + f[i]]
+
+            x[i, 3 * f[i] + 1] = eos
+
+    return x.long()
+
+
+def train_GPT_induction_3(N, N_Val, f_max):
+    sentences = torch.randint(3, 100, (N + N_Val, f_max)).to(device)
+
+    f = torch.randint(f_max // 2, f_max, (N + N_Val,))
+
+    x = torch.zeros((N + N_Val, 3 * f_max + 2)).to(device).int() + pad
+
+    x[:, 0] = sos
+
+    for i in range(N + N_Val):
+        k = 0
+        while (k+1) * f[i] < 3 * f_max :
+            x[i, 1 + k * f[i]:1 + (k + 1) * f[i]] = sentences[i, :f[i]]
+            k += 1
+
+        x[i, 1 + k * f[i]:] = sentences[i, :3*f_max + 2 - (1 + k * f[i])]
+
+    x[:, -1] = eos
+
+    return x.long()

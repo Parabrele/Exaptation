@@ -58,6 +58,19 @@ autre pb/observation : il utilise qu'une seule diagonale (d'où les trous) donc 
 réessayer encoder decoder
 lui donner le vrai test pour voir ce qu'il fait
 
+
+avec architecture GPT :
+	fréquence fixée :
+		il overfit juste la position des mots précédents à chercher
+	fréquence aléatoire :
+		WTF ?!
+		il est ultra bon au début, genre il y a bien le circuit de deux têtes, mais vers le milieu de la phrase c'est tout cassé...
+		en fait on dirait que la pré tête donne quand la phrase est pas trop grande, puis elle se met en grêve et laisse la tête d'induction gérer parce qu'elle lui a assez donné
+		mais c'est complètement con ! elle doit apprendre quand se mettre en grève plutot que de juste donner la bonne réponse !!
+	
+	essayer des phrases plus diverses : pattenrs + fréquences + trouver d'autres trucs...
+
+
 COI : Algo de COI bizarre : enlever les duplications et regarder quel nom propre reste. Exaptation : suite de tokens random, et extraire le set. 
 Virer la partie à partir d'hinibition ?
 https://openreview.net/pdf?id=NpsVSN6o4ul

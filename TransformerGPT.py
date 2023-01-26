@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import math
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass
 class Config:
@@ -87,7 +88,7 @@ class Attention(nn.Module):
         nn.init.normal_(self.W_O, std=self.cfg.init_range)
         self.b_O = nn.Parameter(torch.zeros((cfg.d_residual)))
         
-        self.register_buffer("IGNORE", torch.tensor(-1e5, dtype=torch.float32, device="cuda"))
+        self.register_buffer("IGNORE", torch.tensor(-1e5, dtype=torch.float32, device=device))
     
     def forward(self, normalized_resid_pre):
         # normalized_resid_pre: [batch, position, d_residual]
