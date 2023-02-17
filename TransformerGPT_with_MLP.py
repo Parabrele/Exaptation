@@ -15,6 +15,7 @@ class Config:
     init_range: float = 0.02
     max_length: int = 256
     d_head: int = 32
+    d_mlp: int = 3072
     n_heads: int = 2
     n_layers: int = 2
 
@@ -132,7 +133,7 @@ class MLP(nn.Module):
         # normalized_resid_mid: [batch, position, d_model]
         if self.cfg.debug: print("Normalized_resid_mid:", normalized_resid_mid.shape)
         pre = einsum("batch position d_model, d_model d_mlp -> batch position d_mlp", normalized_resid_mid, self.W_in) + self.b_in
-        post = torch.nn.GELU(pre)
+        post = torch.nn.GELU()(pre)
         mlp_out = einsum("batch position d_mlp, d_mlp d_model -> batch position d_model", post, self.W_out) + self.b_out
         return mlp_out
 
