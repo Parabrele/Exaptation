@@ -227,3 +227,23 @@ def train_GPT_induction_3(N, N_Val, f_max):
     x[:, -1] = eos
 
     return x.long()
+
+def most_frequent(x):
+    #x : tensor 1D
+    #return : most frequent element of x
+
+    return torch.bincount(x).argmax()
+
+
+def fine_tune_most_frequent(N, N_Val, size):
+    #x : random
+    #trg : most frequent
+
+    x = torch.randint(3, 20, (N + N_Val, size)).to(device)
+    trg = torch.zeros((N + N_Val, size)).to(device).int() + pad
+
+    for i in tqdm(range(N + N_Val)):
+        for j in range(size):
+            trg[:, j] = most_frequent(x[i, :j+1])
+    
+    return x.long(), trg.long()
