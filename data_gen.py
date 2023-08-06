@@ -239,11 +239,15 @@ def fine_tune_most_frequent(N, N_Val, size):
     #x : random
     #trg : most frequent
 
-    x = torch.randint(3, 20, (N + N_Val, size)).to(device)
+    print("generating data...")
+
+    x = torch.randint(3, 1000, (N + N_Val, size)).to(device)
     trg = torch.zeros((N + N_Val, size)).to(device).int() + pad
 
     for i in tqdm(range(N + N_Val)):
         for j in range(size):
             trg[:, j] = most_frequent(x[i, :j+1])
+    
+    print("done")
     
     return x.long(), trg.long()
