@@ -16,3 +16,7 @@ project_instruction.txt
 Training.py
 Rapport.pdf
 rapport.tex
+__pycache__/data_gen.cpython-310.pyc
+__pycache__/fine_tune.cpython-310.pyc
+__pycache__/images.cpython-310.pyc
+__pycache__/TransformerGPT_with_MLP.cpython-310.pyc

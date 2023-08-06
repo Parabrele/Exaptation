@@ -87,19 +87,29 @@ def fine_tune(model, lr = 1e-4, weight_decay = 1e-5, epochs = 10, batch_size = 8
 
             ones[torch.argmax(pred, dim = 2) == batch_trg] = 1
             accuracy = torch.sum(ones).item() / (batch_trg.shape[0] * batch_trg.shape[1])
-            y_validation_accuracy.append(accuracy * y_training[0])
+            y_validation_accuracy.append(accuracy)
             if verbose :
                 print("accuracy: ", accuracy)
         
         if verbose :
             print("\n\n")
+    
+    fig, ax = plt.subplots()
 
     plt.xlim(0, epochs)
     plt.ylim(0, y_training[0])
 
-    plt.plot(x_plot, y_training, label="Training")
-    plt.plot(x_plot[1:], y_validation, label="Validation Loss")
-    plt.plot(x_plot[1:], y_validation_accuracy, label="Validation Accuracy")
+    ax.plot(x_plot, y_training, label="Training")
+    ax.plot(x_plot[1:], y_validation, label="Validation Loss")
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Loss")
 
     plt.legend()
+    
+    ax2 = ax.twinx()
+    ax2.plot(x_plot[1:], y_validation_accuracy, label="Validation Accuracy", color="green")
+    ax2.set_ylabel("Accuracy")
+
+    plt.legend()
+
     plt.show()
